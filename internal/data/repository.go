@@ -12,7 +12,7 @@ import (
 type Interface interface {
 	CreateTablesIfNotExists(ctx context.Context) error
 	BatchInsertExcerpts(excerpts []Excerpt) ([]Excerpt, error)
-	GetRandomExcerpt() (Excerpt, error)
+	GetRandomExcerpt(ctx context.Context) (Excerpt, error)
 	InsertSuccessfullTweetResponse(res twitter.SucessfullTweetResponse) (twitter.Tweet, error)
 	InserrtUnsuccessflulTweetResponse(tweet twitter.Tweet) (twitter.Tweet, error)
 }
@@ -75,8 +75,20 @@ func (i *Impl) BatchInsertExcerpts(excerpts []Excerpt) ([]Excerpt, error) {
 	panic("unimplemented")
 }
 
-func (i *Impl) GetRandomExcerpt() (Excerpt, error) {
-	panic("unimplemented")
+func (i *Impl) GetRandomExcerpt(context.Context) (Excerpt, error) {
+	conn, err := pgx.Connect(context.Background(), i.connectionString)
+	if err != nil {
+		return Excerpt{}, fmt.Errorf("something wrong happened while acquiring connection to the database: %w", err)
+	}
+	var e Excerpt
+	for len(e.Excerpt) < twitter.MaxTweetLength {
+		row := conn.QueryRow(context.Background(), "SELECT * FROM excerpts ORDER BY random()")
+		err = row.Scan(&e.Series, &e.Part, &e.Series, &e.Excerpt)
+		if err != nil {
+			return Excerpt{}, fmt.Errorf("something wrong happened while fetching a random excerpt: %w", err)
+		}
+	}
+	return e, nil
 }
 
 func (i *Impl) InserrtUnsuccessflulTweetResponse(tweet twitter.Tweet) (twitter.Tweet, error) {
