@@ -3,13 +3,14 @@ package parser
 import (
 	"context"
 	"encoding/json"
+	"io"
+
 	"github.com/aaegamysta/listen-2-max-payne/internal/db"
 	"go.uber.org/zap"
-	"io"
 )
 
 type Interface interface {
-	Parse(ctx context.Context, reader io.Reader, chunks int) <-chan Result
+	ParseAndSaveExcerpts(ctx context.Context, reader io.Reader, chunks int) error
 }
 
 type Result struct {
@@ -18,11 +19,20 @@ type Result struct {
 }
 
 type impl struct {
-	logger *zap.SugaredLogger
+	logger     *zap.SugaredLogger
+	repository db.Interface
 }
 
-// Parse implements Interface.
-func (i *impl) Parse(ctx context.Context, reader io.Reader, chunks int) <-chan Result {
+func (i *impl) ParseAndSaveExcerpts(ctx context.Context, reader io.Reader, chunks int) error {
+	excerptResultsStream := i.parse(ctx, reader, chunks)
+	err := i.save(ctx, chunks, excerptResultsStream)
+	if err != nil {
+		return err
+	}
+	return io.EOF
+}
+
+func (i *impl) parse(ctx context.Context, reader io.Reader, chunks int) <-chan Result {
 	excerptsResultsStream := make(chan Result, chunks)
 	decoder := json.NewDecoder(reader)
 	go func() {
@@ -55,12 +65,40 @@ func (i *impl) Parse(ctx context.Context, reader io.Reader, chunks int) <-chan R
 				Error:   err,
 			}
 		}
+		i.logger.Infof("finishing parsing all excerpts")
 	}()
 	return excerptsResultsStream
 }
 
-func New(logger *zap.SugaredLogger) Interface {
+func (i *impl) save(ctx context.Context, chunks int, excerptsResults <-chan Result) error {
+	var excerpts []db.Excerpt = make([]db.Excerpt, 0)
+	counter := 0
+	for result := range excerptsResults {
+		if counter == chunks {
+			_, err := i.repository.BatchInsertExcerpts(ctx, excerpts)
+			if err != nil {
+				return err
+			}
+			excerpts = make([]db.Excerpt, 0)
+			counter = 0
+		}
+		if result.Error != nil {
+			return result.Error
+		}
+		excerpts = append(excerpts, result.Excerpt)
+		counter++
+	}
+	_, err := i.repository.BatchInsertExcerpts(ctx, excerpts)
+	if err != nil {
+		return err
+	}
+	i.logger.Infof("finishing saving all excerpts")
+	return nil
+}
+
+func New(logger *zap.SugaredLogger, repo db.Interface) Interface {
 	return &impl{
-		logger: logger,
+		logger:     logger,
+		repository: repo,
 	}
 }
