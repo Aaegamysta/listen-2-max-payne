@@ -1,3 +1,5 @@
 .env
+.idea
 *.development.yaml
 *.production.yaml
+*.testing.yaml

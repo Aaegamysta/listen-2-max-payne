@@ -1,17 +1,17 @@
-package data 
+package db
 
 type Series int
 
 const (
 	Unspecified Series = iota
-	Original 
+	Original
 	TheFallOfMaxPayne
 )
 
 type Excerpt struct {
 	// ID string	maybe?
-	Series string
-	Part string
+	Series  string
+	Part    string
 	Chapter string
 	Excerpt string
 }
