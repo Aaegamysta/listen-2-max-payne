@@ -11,10 +11,10 @@ import (
 
 type Interface interface {
 	CreateTablesIfNotExists(ctx context.Context) error
-	BatchInsertExcerpts(excerpts []Excerpt) ([]Excerpt, error)
+	BatchInsertExcerpts(ctxc context.Context, excerpts []Excerpt) ([]Excerpt, error)
 	GetRandomExcerpt(ctx context.Context) (Excerpt, error)
-	InsertSuccessfullTweetResponse(res twitter.SucessfullTweetResponse) (twitter.Tweet, error)
-	InserrtUnsuccessflulTweetResponse(tweet twitter.Tweet) (twitter.Tweet, error)
+	InsertSuccessfulTweetResponse(res twitter.SucessfullTweetResponse) (twitter.Tweet, error)
+	InsertUnsuccessfulTweetResponse(tweet twitter.Tweet) (twitter.Tweet, error)
 }
 
 type Impl struct {
@@ -31,22 +31,22 @@ func New(cfg Config, logger *zap.SugaredLogger) Interface {
 	return impl
 }
 
-func (i *Impl) CreateTablesIfNotExists(ctx context.Context) error {
-	conn, err := pgx.Connect(ctx, i.connectionString)
+func (repository *Impl) CreateTablesIfNotExists(ctx context.Context) error {
+	conn, err := pgx.Connect(ctx, repository.connectionString)
 	if err != nil {
-		i.logger.Panicf("something wrong happened while connecting to the database: %v", err)
+		repository.logger.Panicf("something wrong happened while connecting to the database: %v", err)
 	}
 	tx, err := conn.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		i.logger.Panicf("something wrong happened while starting transaction for creating tables: %v", err)
+		repository.logger.Panicf("something wrong happened while starting transaction for creating tables: %v", err)
 	}
 	_, err = tx.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS excerpts (
-			series text, part text, chapter text, excerpt text,
+			series int, part text, chapter text, excerpt text,
 			PRIMARY KEY (excerpt)
 	);`)
 	if err != nil {
-		i.logger.Panicf("something wrong happened while creating excerpts table: %v", err)
+		repository.logger.Panicf("something wrong happened while creating excerpts table: %v", err)
 	}
 	_, err = tx.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS successfull_tweet_response (
@@ -54,7 +54,7 @@ func (i *Impl) CreateTablesIfNotExists(ctx context.Context) error {
 			FOREIGN KEY (tweeted_excerpt) REFERENCES excerpts(excerpt)
 	);`)
 	if err != nil {
-		i.logger.Panicf("something wrong happened while creating successfull_tweet_response table: %v", err)
+		repository.logger.Panicf("something wrong happened while creating successfull_tweet_response table: %v", err)
 	}
 	_, err = tx.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS error_tweet_response (
@@ -62,21 +62,37 @@ func (i *Impl) CreateTablesIfNotExists(ctx context.Context) error {
 			FOREIGN KEY (failed_excerpt) REFERENCES excerpts(excerpt)
 	);`)
 	if err != nil {
-		i.logger.Panicf("something wrong happened while creating error_tweet_response table: %v", err)
+		repository.logger.Panicf("something wrong happened while creating error_tweet_response table: %v", err)
 	}
 	err = tx.Commit(ctx)
 	if err != nil {
-		i.logger.Panicf("something wrong happened while commiting table creation statements: %v", err)
+		repository.logger.Panicf("something wrong happened while commiting table creation statements: %v", err)
 	}
 	return nil
 }
 
-func (i *Impl) BatchInsertExcerpts(excerpts []Excerpt) ([]Excerpt, error) {
-	panic("unimplemented")
+func (repository *Impl) BatchInsertExcerpts(ctx context.Context, excerpts []Excerpt) ([]Excerpt, error) {
+	conn, err := pgx.Connect(context.Background(), repository.connectionString)
+	if err != nil {
+		return nil, fmt.Errorf("something wrong happened while acquiring connection to the database: %w", err)
+	}
+	_, err = conn.CopyFrom(context.Background(),
+		pgx.Identifier{"excerpts"}, []string{"series", "part", "chapter", "excerpt"},
+		pgx.CopyFromSlice(len(excerpts), func(i int) ([]any, error) {
+			if len(excerpts[i].Excerpt) > 280 {
+				repository.logger.Warnf("found an excerpt that will be not be tweetable because it is more than 28 characters %s", excerpts[i].Excerpt)
+			}
+			return []any{excerpts[i].Series, excerpts[i].Part, excerpts[i].Chapter, excerpts[i].Excerpt}, nil
+		}),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("something wrong happened while batch inserting excerpts: %w", err)
+	}
+	return excerpts, nil
 }
 
-func (i *Impl) GetRandomExcerpt(context.Context) (Excerpt, error) {
-	conn, err := pgx.Connect(context.Background(), i.connectionString)
+func (repository *Impl) GetRandomExcerpt(context.Context) (Excerpt, error) {
+	conn, err := pgx.Connect(context.Background(), repository.connectionString)
 	if err != nil {
 		return Excerpt{}, fmt.Errorf("something wrong happened while acquiring connection to the database: %w", err)
 	}
@@ -91,10 +107,10 @@ func (i *Impl) GetRandomExcerpt(context.Context) (Excerpt, error) {
 	return e, nil
 }
 
-func (i *Impl) InserrtUnsuccessflulTweetResponse(tweet twitter.Tweet) (twitter.Tweet, error) {
+func (repository *Impl) InsertUnsuccessfulTweetResponse(tweet twitter.Tweet) (twitter.Tweet, error) {
 	panic("unimplemented")
 }
 
-func (i *Impl) InsertSuccessfullTweetResponse(res twitter.SucessfullTweetResponse) (twitter.Tweet, error) {
+func (repository *Impl) InsertSuccessfulTweetResponse(res twitter.SucessfullTweetResponse) (twitter.Tweet, error) {
 	panic("unimplemented")
 }
