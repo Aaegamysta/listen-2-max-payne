@@ -10,8 +10,8 @@ const (
 
 type Excerpt struct {
 	// ID string	maybe?
-	Series  string
-	Part    string
-	Chapter string
-	Excerpt string
+	Series  int    `json:"series"`
+	Part    string `json:"part"`
+	Chapter string `json:"chapter"`
+	Excerpt string `json:"excerpt"`
 }
