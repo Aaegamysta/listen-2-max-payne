@@ -1,5 +1,5 @@
 package parser
 
 type Config struct {
-	Chunks int `yaml:"batchInsertChunkSize"`
+	BatchInsertChunkSize int `yaml:"batchInsertChunkSize"`
 }
