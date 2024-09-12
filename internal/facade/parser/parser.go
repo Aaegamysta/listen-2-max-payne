@@ -10,7 +10,7 @@ import (
 )
 
 type Interface interface {
-	ParseAndSaveExcerpts(ctx context.Context, reader io.Reader, chunks int) error
+	ParseAndSaveExcerpts(ctx context.Context, reader io.Reader) error
 }
 
 type Result struct {
@@ -21,11 +21,12 @@ type Result struct {
 type impl struct {
 	logger     *zap.SugaredLogger
 	repository db.Interface
+	batchInsertChunkSize int
 }
 
-func (i *impl) ParseAndSaveExcerpts(ctx context.Context, reader io.Reader, chunks int) error {
-	excerptResultsStream := i.parse(ctx, reader, chunks)
-	err := i.save(ctx, chunks, excerptResultsStream)
+func (i *impl) ParseAndSaveExcerpts(ctx context.Context, reader io.Reader) error {
+	excerptResultsStream := i.parse(ctx, reader, i.batchInsertChunkSize)
+	err := i.save(ctx, i.batchInsertChunkSize, excerptResultsStream)
 	if err != nil {
 		return err
 	}
@@ -96,9 +97,10 @@ func (i *impl) save(ctx context.Context, chunks int, excerptsResults <-chan Resu
 	return nil
 }
 
-func New(logger *zap.SugaredLogger, repo db.Interface) Interface {
+func New(ctx context.Context, cfg Config,logger *zap.SugaredLogger, repo db.Interface) Interface {
 	return &impl{
 		logger:     logger,
 		repository: repo,
+		batchInsertChunkSize: cfg.BatchInsertChunkSize,
 	}
 }

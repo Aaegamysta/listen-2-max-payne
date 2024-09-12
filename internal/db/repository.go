@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/aaegamysta/listen-2-max-payne/internal/twitter"
 	"github.com/jackc/pgx/v5"
@@ -13,8 +14,8 @@ type Interface interface {
 	CreateTablesIfNotExists(ctx context.Context) error
 	BatchInsertExcerpts(ctxc context.Context, excerpts []Excerpt) ([]Excerpt, error)
 	GetRandomExcerpt(ctx context.Context) (Excerpt, error)
-	InsertSuccessfulTweetResponse(res twitter.SucessfullTweetResponse) (twitter.Tweet, error)
-	InsertUnsuccessfulTweetResponse(tweet twitter.Tweet) (twitter.Tweet, error)
+	InsertSuccessfulTweetResponse(res twitter.SucessfullTweetResponse) (error)
+	InsertUnsuccessfulTweetResponse(excerpt Excerpt, res twitter.UnsucessfullTweetResponse) (error)
 }
 
 type Impl struct {
@@ -22,7 +23,7 @@ type Impl struct {
 	connectionString string
 }
 
-func New(cfg Config, logger *zap.SugaredLogger) Interface {
+func New(ctx context.Context, cfg Config, logger *zap.SugaredLogger) Interface {
 	connStr := fmt.Sprintf("postgres://%s:%s@%s:%d/%s", cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Database)
 	impl := &Impl{
 		connectionString: connStr,
@@ -107,10 +108,32 @@ func (repository *Impl) GetRandomExcerpt(context.Context) (Excerpt, error) {
 	return e, nil
 }
 
-func (repository *Impl) InsertUnsuccessfulTweetResponse(tweet twitter.Tweet) (twitter.Tweet, error) {
-	panic("unimplemented")
+func (repository *Impl) InsertSuccessfulTweetResponse(res twitter.SucessfullTweetResponse) error {
+	conn, err :=pgx.Connect(context.Background(), repository.connectionString)
+	if err != nil {
+		return fmt.Errorf("something wrong happened while acquiring connection to the database while trying to insert successful tweet response: %w", err)
+	}
+	_, err = conn.Exec(context.Background(), "INSERT INTO successfull_tweet_response (posted_on, tweeted_excerpt, tweet_id, edit_history_tweet_ids) VALUES ($1, $2, $3, $4)", 
+		time.Now(), res.Text, res.Data.ID, res.EditHistoryTweetIDs,
+	)
+	if err != nil {
+		return fmt.Errorf("something wrong happened while inserting successful tweet response: %w", err)
+	}
+	return nil
 }
 
-func (repository *Impl) InsertSuccessfulTweetResponse(res twitter.SucessfullTweetResponse) (twitter.Tweet, error) {
-	panic("unimplemented")
+func (repository *Impl) InsertUnsuccessfulTweetResponse(excerpt Excerpt, unsucessfullResponse twitter.UnsucessfullTweetResponse) error {
+	conn, err :=pgx.Connect(context.Background(), repository.connectionString)
+	if err != nil {
+		return fmt.Errorf("something wrong happened while acquiring connection to the database while trying to insert successful tweet response: %w", err)
+	}
+	_, err = conn.Exec(context.Background(), 
+		"INSERT INTO error_tweet_response (post_failed_on, title, type, detail, status, failed_excerpt) VALUES ($1, $2, $3, $4, $5, $6)",
+		time.Now(), unsucessfullResponse.Title, unsucessfullResponse.Type, unsucessfullResponse.Detail, unsucessfullResponse.Status, excerpt.Excerpt,
+	)
+	if err != nil {
+		return fmt.Errorf("something wrong happened while inserting successful tweet response: %w", err)
+	}
+	return nil
 }
+
