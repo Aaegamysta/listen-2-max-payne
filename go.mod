@@ -4,6 +4,7 @@ go 1.23.0
 
 require (
 	github.com/dghubble/oauth1 v0.7.3 // indirect
+	github.com/golangci/golangci-lint v1.61.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/pgx/v5 v5.7.1 // indirect

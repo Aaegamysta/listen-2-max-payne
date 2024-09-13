@@ -3,9 +3,9 @@ package twitter
 const MaxTweetLength = 280
 
 type Config struct {
-	ConsumerKey       string `json:"consumerKey"`
-	ConsumerSecret    string `json:"consumerSecret"`
-	AccessToken       string `json:"accessToken"`
-	AccessSecret      string `json:"accessSecret"`
-	Endpoint         string `json:"endpoint"`
+	ConsumerKey    string `yaml:"consumerKey"`
+	ConsumerSecret string `yaml:"consumerSecret"`
+	AccessToken    string `yaml:"accessToken"`
+	AccessSecret   string `yaml:"accessSecret"`
+	Endpoint       string `yaml:"endpoint"`
 }

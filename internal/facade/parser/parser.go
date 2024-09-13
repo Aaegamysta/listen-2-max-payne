@@ -19,8 +19,8 @@ type Result struct {
 }
 
 type impl struct {
-	logger     *zap.SugaredLogger
-	repository db.Interface
+	logger               *zap.SugaredLogger
+	repository           db.Interface
 	batchInsertChunkSize int
 }
 
@@ -33,7 +33,7 @@ func (i *impl) ParseAndSaveExcerpts(ctx context.Context, reader io.Reader) error
 	return io.EOF
 }
 
-func (i *impl) parse(ctx context.Context, reader io.Reader, chunks int) <-chan Result {
+func (i *impl) parse(_ context.Context, reader io.Reader, chunks int) <-chan Result {
 	excerptsResultsStream := make(chan Result, chunks)
 	decoder := json.NewDecoder(reader)
 	go func() {
@@ -72,7 +72,7 @@ func (i *impl) parse(ctx context.Context, reader io.Reader, chunks int) <-chan R
 }
 
 func (i *impl) save(ctx context.Context, chunks int, excerptsResults <-chan Result) error {
-	var excerpts []db.Excerpt = make([]db.Excerpt, 0)
+	excerpts := make([]db.Excerpt, 0)
 	counter := 0
 	for result := range excerptsResults {
 		if counter == chunks {
@@ -97,10 +97,10 @@ func (i *impl) save(ctx context.Context, chunks int, excerptsResults <-chan Resu
 	return nil
 }
 
-func New(ctx context.Context, cfg Config,logger *zap.SugaredLogger, repo db.Interface) Interface {
+func New(_ context.Context, cfg Config, logger *zap.SugaredLogger, repo db.Interface) Interface {
 	return &impl{
-		logger:     logger,
-		repository: repo,
+		logger:               logger,
+		repository:           repo,
 		batchInsertChunkSize: cfg.BatchInsertChunkSize,
 	}
 }

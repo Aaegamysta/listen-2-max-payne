@@ -2,6 +2,7 @@ package bot
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -16,11 +17,10 @@ import (
 )
 
 type Bot struct {
-	cfg        Config
-	logger     *zap.SugaredLogger
-	Parser     parser.Interface
-	Publisher  publisher.Interface
-	Repository db.Interface
+	cfg           Config
+	logger        *zap.SugaredLogger
+	Parser        parser.Interface
+	Publisher     publisher.Interface
 }
 
 func New(ctx context.Context, env string) *Bot {
@@ -32,10 +32,10 @@ func New(ctx context.Context, env string) *Bot {
 	sugaredLogger := logger.Sugar()
 	configFilePath := fmt.Sprintf("./configs/app.%s.yaml", env)
 	file, err := os.Open(configFilePath)
-	defer file.Close()
 	if err != nil {
 		sugaredLogger.Panicf("something wrong happened while opening config file: %v", err)
 	}
+	defer file.Close()
 	fileInBytes, err := io.ReadAll(file)
 	if err != nil {
 		sugaredLogger.Panicf("something wrong happened while reading config file: %v", err)
@@ -50,10 +50,9 @@ func New(ctx context.Context, env string) *Bot {
 	twitterClient := twitter.New(ctx, cfg.Twitter, sugaredLogger)
 	publisher := publisher.New(sugaredLogger, cfg.Publisher, repo, twitterClient)
 	bot := &Bot{
-		cfg:        cfg,
-		Repository: repo,
-		Parser:     parser,
-		Publisher:  publisher,
+		cfg:           cfg,
+		Parser:        parser,
+		Publisher:     publisher,
 	}
 	return bot
 }
@@ -64,7 +63,7 @@ func (b *Bot) Run(ctx context.Context) {
 		b.logger.Panicf("something wrong happened while opening excerpts file: %v", err)
 	}
 	err = b.Parser.ParseAndSaveExcerpts(ctx, f)
-	if err == io.EOF {
+	if errors.Is(err, io.EOF) {
 		b.logger.Info("excerpts parsed and saved successfully")
 	}
 	if err != nil {

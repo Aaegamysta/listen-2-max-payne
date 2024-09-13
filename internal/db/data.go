@@ -8,8 +8,18 @@ const (
 	TheFallOfMaxPayne
 )
 
+func (s Series) String() string {
+	switch s {
+	case Original:
+		return "1"
+	case TheFallOfMaxPayne:
+		return "The Fall of Max Payne"
+	default:
+		return "0"
+	}
+}
+
 type Excerpt struct {
-	// ID string	maybe?
 	Series  int    `json:"series"`
 	Part    string `json:"part"`
 	Chapter string `json:"chapter"`
