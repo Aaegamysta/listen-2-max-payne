@@ -3,9 +3,11 @@ package publisher
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/aaegamysta/listen-2-max-payne/internal/db"
+	"github.com/aaegamysta/listen-2-max-payne/internal/queue"
 	"github.com/aaegamysta/listen-2-max-payne/internal/twitter"
 	"go.uber.org/zap"
 )
@@ -20,7 +22,7 @@ type Impl struct {
 	repository        db.Interface
 	twitterClient     twitter.Interface
 	// TODO: Double ended queue to prevent previously tweeted
-	lruTweets any
+	doubleEndedQueue queue.Dequeue
 }
 
 func New(logger *zap.SugaredLogger, cfg Config, repository db.Interface, twitterClient twitter.Interface) Interface {
@@ -29,12 +31,15 @@ func New(logger *zap.SugaredLogger, cfg Config, repository db.Interface, twitter
 		repository:        repository,
 		twitterClient:     twitterClient,
 		tweetPeriodPerDay: time.Duration(cfg.TweetPeriodPerDay),
+		doubleEndedQueue:  queue.New(20),
 	}
 }
 
 func (i *Impl) StartPublishingExcerpts(ctx context.Context) {
 	go func() {
-		t := time.NewTicker(1 * i.tweetPeriodPerDay)
+		// for purpose of testing setting it as a minute
+		t := time.NewTicker(1 * time.Minute)
+		// t := time.NewTicker(1 * i.tweetPeriodPerDay)
 		for {
 			select {
 			case <-ctx.Done():
@@ -54,20 +59,30 @@ func (i *Impl) tweet(ctx context.Context) error {
 	if err != nil {
 		i.logger.Errorf("failed to retrieve random excerpt for tweeting: %v", err)
 	}
-	// TODO: Check if it is present in the cache or queue if present, keep fetching randomly, if not present, tweet it and add it to the cache. If present keep fetching randomly
+	for i.doubleEndedQueue.Peek().Excerpt == excerpt.Excerpt {
+		excerpt, err = i.repository.GetRandomExcerpt(ctx)
+		if err != nil {
+			return fmt.Errorf(`failed to continuously retrieve random excerpt because front element is equal to the fetched excerpt: %w`,
+				err)
+		}
+	}
+	_, _ = i.doubleEndedQueue.Dequeue()
+	_ = i.doubleEndedQueue.Enqueue(excerpt)
 	successfulTweetRes, err := i.twitterClient.Post(ctx, twitter.Tweet{
 		Text: excerpt.Excerpt,
 	})
-	var unsuccessfullTweetResponse twitter.UnsucessfullTweetResponse
+
+	var unsuccessfullTweetResponse twitter.TweetError
 	if errors.As(err, &unsuccessfullTweetResponse) {
-		err = i.repository.InsertUnsuccessfulTweetResponse(twitter.UnsucessfullTweetResponse{})
-	}
-	if err != nil {
+		// here an error can be generated if the unsuccsesful tweet response is not sent
+		return i.repository.InsertUnsuccessfulTweetResponse(ctx, excerpt, twitter.TweetError{})
+	} else if err != nil {
 		return err
 	}
-	err = i.repository.InsertSuccessfulTweetResponse(successfulTweetRes)
+
+	err = i.repository.InsertSuccessfulTweetResponse(ctx, successfulTweetRes)
 	if err != nil {
-		i.logger.Errorf("failed to insert successful tweet response but it was at least tweeted: %v", err)
+		return fmt.Errorf("failed to insert successful tweet response but it was at least tweeted: %w", err)
 	}
 	i.logger.Infof("tweeted excerpt: %v on %s", successfulTweetRes.Text, time.Now())
 	return nil
