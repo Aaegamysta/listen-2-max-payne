@@ -3,13 +3,13 @@ package twitter
 import "fmt"
 
 type SucessfullTweetResponse struct {
-	Data                TweetData `json:"data"`
-	Text                string    `json:"text"`
-	EditHistoryTweetIDs []string  `json:"edit_history_tweet_ids"`
+	Data TweetData `json:"data"`
 }
 
 type TweetData struct {
-	ID string `json:"id"`
+	ID                  string   `json:"id"`
+	Text                string   `json:"text"`
+	EditHistoryTweetIDs []string `json:"edit_history_tweet_ids"`
 }
 
 type TweetError struct {

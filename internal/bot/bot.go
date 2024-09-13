@@ -17,10 +17,10 @@ import (
 )
 
 type Bot struct {
-	cfg           Config
-	logger        *zap.SugaredLogger
-	Parser        parser.Interface
-	Publisher     publisher.Interface
+	cfg       Config
+	logger    *zap.SugaredLogger
+	Parser    parser.Interface
+	Publisher publisher.Interface
 }
 
 func New(ctx context.Context, env string) *Bot {
@@ -46,28 +46,33 @@ func New(ctx context.Context, env string) *Bot {
 		sugaredLogger.Panicf("something wrong happened while unmarshalling config file: %v", err)
 	}
 	repo := db.New(ctx, cfg.Database, sugaredLogger)
+	err = repo.CreateTablesIfNotExists(ctx)
+	if err != nil {
+		sugaredLogger.Panicf("failed to create tables at the start %w", err)
+	}
 	parser := parser.New(ctx, cfg.Parser, sugaredLogger, repo)
 	twitterClient := twitter.New(ctx, cfg.Twitter, sugaredLogger)
 	publisher := publisher.New(sugaredLogger, cfg.Publisher, repo, twitterClient)
 	bot := &Bot{
-		cfg:           cfg,
-		Parser:        parser,
-		Publisher:     publisher,
+		cfg:       cfg,
+		Parser:    parser,
+		Publisher: publisher,
+		logger:    sugaredLogger,
 	}
+	bot.logger.Infoln("successfully created the bot...")
 	return bot
 }
 
 func (b *Bot) Run(ctx context.Context) {
+	b.logger.Infoln("starting the bot..")
 	f, err := os.Open("./data/excerpts.json")
 	if err != nil {
 		b.logger.Panicf("something wrong happened while opening excerpts file: %v", err)
 	}
 	err = b.Parser.ParseAndSaveExcerpts(ctx, f)
-	if errors.Is(err, io.EOF) {
-		b.logger.Info("excerpts parsed and saved successfully")
-	}
-	if err != nil {
+	if !errors.Is(err, io.EOF) {
 		b.logger.Panicf("something wrong happened while parsing and saving excerpts: %v", err)
 	}
+	b.logger.Info("excerpts parsed and saved successfully")
 	b.Publisher.StartPublishingExcerpts(ctx)
 }

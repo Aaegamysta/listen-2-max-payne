@@ -103,13 +103,14 @@ func (repository *Impl) GetRandomExcerpt(ctx context.Context) (Excerpt, error) {
 		return Excerpt{}, fmt.Errorf("something wrong happened while acquiring connection to the database: %w", err)
 	}
 	var e Excerpt
-	for len(e.Excerpt) < twitter.MaxTweetLength {
+	for tweetableExcerpt := true; tweetableExcerpt; tweetableExcerpt = len(e.Excerpt) > twitter.MaxTweetLength && e.Excerpt == "" {
 		row := conn.QueryRow(ctx, "SELECT * FROM excerpts ORDER BY random()")
-		err = row.Scan(&e.Series, &e.Part, &e.Series, &e.Excerpt)
+		err = row.Scan(&e.Series, &e.Part, &e.Chapter, &e.Excerpt)
 		if err != nil {
 			return Excerpt{}, fmt.Errorf("something wrong happened while fetching a random excerpt: %w", err)
 		}
 	}
+	repository.logger.Infof("successfully fetched excerpt %s from chapter %s, part %s", e.Excerpt, e.Chapter, e.Part)
 	return e, nil
 }
 
@@ -123,11 +124,12 @@ func (repository *Impl) InsertSuccessfulTweetResponse(ctx context.Context, res t
 	_, err = conn.Exec(ctx, `INSERT INTO 
 		successful_tweet_response (posted_on, tweeted_excerpt, tweet_id, edit_history_tweet_ids) 
 		VALUES ($1, $2, $3, $4)`,
-		time.Now(), res.Text, res.Data.ID, res.EditHistoryTweetIDs,
+		time.Now(), res.Data.Text, res.Data.ID, res.Data.EditHistoryTweetIDs,
 	)
 	if err != nil {
 		return fmt.Errorf("something wrong happened while inserting successful tweet response: %w", err)
 	}
+	repository.logger.Infof("inserted the successful tweet response for excerpt %s", res.Data.Text)
 	return nil
 }
 
@@ -154,5 +156,6 @@ func (repository *Impl) InsertUnsuccessfulTweetResponse(ctx context.Context,
 	if err != nil {
 		return fmt.Errorf("something wrong happened while inserting successful tweet response: %w", err)
 	}
+	repository.logger.Infof("inserted the successful tweet response for excerpt %s", excerpt.Excerpt)
 	return nil
 }

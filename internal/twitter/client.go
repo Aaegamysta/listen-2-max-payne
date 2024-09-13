@@ -69,9 +69,14 @@ func (i *Impl) Post(ctx context.Context, e Tweet) (SucessfullTweetResponse, erro
 	}
 	defer res.Body.Close()
 	var successfulTweetRes SucessfullTweetResponse
-	if err := json.NewDecoder(res.Body).Decode(&successfulTweetRes); err != nil {
+	b, err := io.ReadAll(res.Body)
+	if err != nil {
+		return SucessfullTweetResponse{},
+			fmt.Errorf("failed to unmarshall the successful tweet response, maybe it failed? : %w the body looks like so %s", err, b)
+	}
+	err = json.Unmarshal(b, &successfulTweetRes)
+	if err != nil {
 		// the response will be stringified because we do not know the correct struct format to parse it
-		b, _ := io.ReadAll(res.Body)
 		return SucessfullTweetResponse{},
 			fmt.Errorf("failed to unmarshall the successful tweet response, maybe it failed? : %w the body looks like so %s", err, b)
 	}

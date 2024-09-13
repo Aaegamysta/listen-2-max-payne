@@ -59,7 +59,7 @@ func (i *Impl) tweet(ctx context.Context) error {
 	if err != nil {
 		i.logger.Errorf("failed to retrieve random excerpt for tweeting: %v", err)
 	}
-	for i.doubleEndedQueue.Peek().Excerpt == excerpt.Excerpt {
+	for !i.doubleEndedQueue.Empty() && i.doubleEndedQueue.Peek().Excerpt == excerpt.Excerpt {
 		excerpt, err = i.repository.GetRandomExcerpt(ctx)
 		if err != nil {
 			return fmt.Errorf(`failed to continuously retrieve random excerpt because front element is equal to the fetched excerpt: %w`,
@@ -84,6 +84,6 @@ func (i *Impl) tweet(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to insert successful tweet response but it was at least tweeted: %w", err)
 	}
-	i.logger.Infof("tweeted excerpt: %v on %s", successfulTweetRes.Text, time.Now())
+	i.logger.Infof("tweeted excerpt: %v on %s", successfulTweetRes.Data.Text, time.Now())
 	return nil
 }
